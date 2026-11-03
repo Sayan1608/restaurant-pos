@@ -1,0 +1,81 @@
+// POS data model.
+//
+// Step 1 establishes only the tenancy spine: a Tenant (the restaurant
+// business) and its Outlets (locations that each issue invoices under their own
+// GSTIN and their own invoice number series). Every scoped table added in later
+// steps carries `outletId`, because retrofitting tenancy onto a live invoice
+// table is not a migration anybody wants to run.
+//
+// Conventions for every model in this schema:
+//   * UUID primary keys  -- safe to generate client-side, no sequence leak.
+//   * Money is Int paise -- never Float, never Decimal-as-float. See @pos/money.
+//   * created/updatedAt  -- on everything, for audit and support.
+//   * Soft disable via `isActive` rather than deletion for anything an invoice
+//     might reference.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id       String  @id @default(uuid()) @db.Uuid
+  name     String  @db.VarChar(120)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  outlets Outlet[]
+
+  @@map("tenants")
+}
+
+model Outlet {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+
+  /// Short name shown on the POS and in the app header.
+  name String @db.VarChar(120)
+
+  /// Registered business name printed on the tax invoice.
+  legalName String @db.VarChar(200)
+
+  addressLine1 String? @db.VarChar(200)
+  addressLine2 String? @db.VarChar(200)
+  city         String? @db.VarChar(80)
+  state        String? @db.VarChar(80)
+  postalCode   String? @db.VarChar(16)
+  phone        String? @db.VarChar(20)
+
+  /// 15-character GSTIN. Nullable: a small outlet may be below the threshold,
+  /// in which case the invoice must not claim to be a tax invoice.
+  gstin        String? @db.VarChar(15)
+  fssaiLicence String? @db.VarChar(32)
+
+  /// ISO 4217 currency code. INR for v1, stored so reports never assume.
+  currency String @default("INR") @db.Char(3)
+
+  /// IANA zone. The business day, and therefore the Z-report cut-off and the
+  /// invoice number series, are computed in this zone -- not in UTC and not in
+  /// whatever the server happens to be set to.
+  timezone String @default("Asia/Kolkata") @db.VarChar(64)
+
+  /// Free text printed at the foot of every invoice.
+  invoiceFooter String? @db.VarChar(500)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("outlets")
+}

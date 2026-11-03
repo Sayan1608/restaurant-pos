@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+/*
+ * POS design tokens.
+ *
+ * The counter is a bright, busy place and shifts run long, so the shell is
+ * dark by default with high-contrast text and deliberately large touch
+ * targets. Everything here is a token rather than a literal, because Step 3
+ * onward will theme per outlet.
+ */
+@theme {
+  --color-surface: oklch(0.21 0.02 258);
+  --color-surface-raised: oklch(0.26 0.02 258);
+  --color-surface-sunken: oklch(0.17 0.02 258);
+  --color-border-subtle: oklch(0.34 0.02 258);
+
+  --color-ink: oklch(0.97 0.005 258);
+  --color-ink-muted: oklch(0.74 0.015 258);
+
+  --color-brand: oklch(0.68 0.16 45);
+  --color-brand-ink: oklch(0.2 0.03 45);
+
+  --color-ok: oklch(0.72 0.16 155);
+  --color-warn: oklch(0.78 0.15 85);
+  --color-bad: oklch(0.65 0.2 25);
+
+  --radius-card: 0.875rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-surface-sunken);
+    color: var(--color-ink);
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-variant-numeric: tabular-nums;
+    overscroll-behavior: none;
+  }
+
+  /* Money and quantities must not jitter as digits change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

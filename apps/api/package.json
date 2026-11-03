@@ -1,0 +1,56 @@
+{
+  "name": "@pos/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "build": "nest build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prisma": "dotenv -e ../../.env -- prisma",
+    "db:generate": "prisma generate",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "db:migrate:check": "dotenv -e ../../.env -- prisma migrate status",
+    "db:reset": "dotenv -e ../../.env -- prisma migrate reset --force",
+    "db:seed": "dotenv -e ../../.env -- prisma db seed",
+    "db:studio": "dotenv -e ../../.env -- prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@pos/contracts": "workspace:*",
+    "@pos/money": "workspace:*",
+    "@prisma/client": "^6.0.0",
+    "helmet": "^8.0.0",
+    "nestjs-pino": "^4.1.0",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@swc/core": "^1.7.40",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "@types/supertest": "^6.0.2",
+    "dotenv-cli": "^7.4.2",
+    "pino-pretty": "^11.3.0",
+    "prisma": "^6.0.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "unplugin-swc": "^1.5.1",
+    "vitest": "^2.1.4"
+  }
+}
