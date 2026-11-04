@@ -30,7 +30,11 @@ model Tenant {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  outlets Outlet[]
+  outlets      Outlet[]
+  staffUsers   StaffUser[]
+  devices      Device[]
+  pairingCodes PairingCode[]
+  auditLogs    AuditLog[]
 
   @@map("tenants")
 }
@@ -75,7 +79,218 @@ model Outlet {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
+  staffUsers   StaffUser[]
+  devices      Device[]
+  pairingCodes PairingCode[]
+  auditLogs    AuditLog[]
+
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("outlets")
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: staff, devices and the audit log.
+//
+// Nothing that touches money may be anonymous, so every table below exists to
+// answer one of two questions: "who is allowed to do this?" and "who did it?".
+// ---------------------------------------------------------------------------
+
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+
+  @@map("role")
+}
+
+enum ActorType {
+  STAFF
+  DEVICE
+  SYSTEM
+
+  @@map("actor_type")
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+  DENIED
+
+  @@map("audit_outcome")
+}
+
+model StaffUser {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  outletId String @db.Uuid
+
+  name  String  @db.VarChar(120)
+  /// Owners and managers sign in by email. Cashiers have none, and Postgres
+  /// permits many NULLs in a unique index, so they do not collide.
+  email String? @db.VarChar(200)
+  role  Role
+
+  /// Argon2id. Null for a cashier, who has only a PIN.
+  passwordHash String? @db.VarChar(255)
+  /// Argon2id over the PIN. A 4-6 digit PIN has at most ~1M combinations, so
+  /// the slow hash, the device binding and the lockout below are all load
+  /// bearing -- none of them is sufficient alone.
+  pinHash      String? @db.VarChar(255)
+
+  /// Reset on success. Drives the lockout.
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime? @db.Timestamptz(3)
+  lastLoginAt    DateTime? @db.Timestamptz(3)
+
+  /// Deactivated rather than deleted: an audit row or a past shift may still
+  /// reference this person.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet Outlet @relation(fields: [outletId], references: [id], onDelete: Restrict)
+
+  refreshTokens      RefreshToken[]
+  pairingCodes       PairingCode[]  @relation("PairingCodeCreator")
+  auditLogsPerformed AuditLog[]     @relation("AuditActor")
+
+  @@unique([tenantId, email])
+  @@index([outletId, role])
+  @@index([outletId, isActive])
+  @@map("staff_users")
+}
+
+/// A till. A cashier PIN is only accepted from a device that a manager has
+/// paired, so a leaked 4-digit PIN is useless on an attacker's own phone.
+model Device {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  outletId String @db.Uuid
+
+  name String @db.VarChar(120)
+
+  /// SHA-256 of a 256-bit random token. The token itself is shown once, at
+  /// pairing, and never stored -- so a database leak does not hand over
+  /// working device credentials. A fast hash is correct here: the token has
+  /// full entropy, and this column is looked up on every request.
+  tokenHash String @unique @db.Char(64)
+
+  pairedAt   DateTime  @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime? @db.Timestamptz(3)
+  /// Set rather than deleted, so audit rows keep pointing at a real device.
+  revokedAt  DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet Outlet @relation(fields: [outletId], references: [id], onDelete: Restrict)
+
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@index([outletId])
+  @@map("devices")
+}
+
+/// Short-lived, single-use code a manager reads out so a tablet can pair
+/// itself. Kept hashed: the code is a credential until it is used.
+model PairingCode {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  outletId String @db.Uuid
+
+  codeHash   String    @db.Char(64)
+  deviceName String    @db.VarChar(120)
+  expiresAt  DateTime  @db.Timestamptz(3)
+  /// Single use: set the moment it is redeemed.
+  usedAt     DateTime? @db.Timestamptz(3)
+
+  createdByStaffId String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet    Outlet    @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  createdBy StaffUser @relation("PairingCodeCreator", fields: [createdByStaffId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, codeHash])
+  @@index([outletId, expiresAt])
+  @@map("pairing_codes")
+}
+
+/// Refresh tokens rotate: each use issues a new one and revokes the old.
+/// `replacedByTokenId` records the chain, so presenting an already-rotated
+/// token is detectable as theft rather than treated as a normal retry.
+model RefreshToken {
+  id          String  @id @default(uuid()) @db.Uuid
+  staffUserId String  @db.Uuid
+  deviceId    String? @db.Uuid
+
+  tokenHash     String    @unique @db.Char(64)
+  expiresAt     DateTime  @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  /// Why it was revoked: rotated, logout, reuse detected, staff deactivated.
+  revokedReason String?   @db.VarChar(40)
+
+  replacedByTokenId String? @unique @db.Uuid
+
+  ip        String? @db.VarChar(45)
+  userAgent String? @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  device    Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([staffUserId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+/// Append-only. There is no updatedAt and nothing in the application updates a
+/// row here: an audit trail that can be edited is not an audit trail.
+model AuditLog {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  outletId String @db.Uuid
+
+  actorType    ActorType
+  actorStaffId String?   @db.Uuid
+  /// The actor's name as it was at the time. Denormalised on purpose, so
+  /// renaming or deactivating a staff member cannot rewrite history.
+  actorLabel   String?   @db.VarChar(120)
+
+  /// Dotted verb, e.g. `auth.login`, `device.revoke`, `menu.price.update`.
+  action     String  @db.VarChar(80)
+  entityType String? @db.VarChar(60)
+  entityId   String? @db.VarChar(64)
+
+  /// State before and after, for anything that mutates. Secrets are stripped
+  /// before they get here -- see AuditService.
+  before Json?
+  after  Json?
+
+  outcome AuditOutcome
+  reason  String?      @db.VarChar(200)
+
+  ip        String? @db.VarChar(45)
+  deviceId  String? @db.Uuid
+  /// Joins an audit row to the server log line for the same request.
+  requestId String? @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet     Outlet     @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  actorStaff StaffUser? @relation("AuditActor", fields: [actorStaffId], references: [id], onDelete: SetNull)
+  device     Device?    @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([outletId, createdAt])
+  @@index([actorStaffId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }

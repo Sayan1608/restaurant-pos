@@ -24,6 +24,7 @@ describe('health endpoints', () => {
     NODE_ENV: 'test',
     APP_VERSION: '1.2.3-test',
     DATABASE_URL: 'postgresql://pos:pos@localhost:5432/pos',
+    JWT_ACCESS_SECRET: 'test-only-secret-0123456789abcdefghijklmnop',
   });
 
   beforeAll(async () => {

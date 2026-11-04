@@ -47,6 +47,39 @@ export const EnvSchema = z
 
     /** Reported by /healthz; set from the image tag or commit SHA in CI. */
     APP_VERSION: z.string().default('0.1.0-dev'),
+
+    // --- auth -----------------------------------------------------------
+    /**
+     * Signing key for access tokens. No default on purpose: a fallback secret
+     * is the kind of thing that reaches production and forges tokens. 32 bytes
+     * minimum so an HS256 key is at least as wide as its digest.
+     */
+    JWT_ACCESS_SECRET: z
+      .string()
+      .min(
+        32,
+        'JWT_ACCESS_SECRET must be at least 32 characters. Generate one with: ' +
+          "node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"",
+      ),
+
+    /** Short, because an access token cannot be revoked before it expires. */
+    ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
+
+    /**
+     * Long, because a till should not log itself out mid-shift. Safe because
+     * refresh tokens rotate on every use and are revocable server-side.
+     */
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+
+    /** Failed sign-ins before the account is locked. */
+    LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(3).max(20).default(5),
+
+    /** How long a lockout lasts. Long enough to stop guessing, short enough
+     * that a cashier is not locked out for the rest of the shift. */
+    LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().min(1).max(1_440).default(15),
+
+    /** A pairing code is read aloud and typed in, so it lives minutes. */
+    PAIRING_CODE_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
   })
   .readonly();
 

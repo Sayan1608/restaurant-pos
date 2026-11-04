@@ -1,7 +1,9 @@
 import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Liveness, Readiness } from '@pos/contracts';
 import type { Response } from 'express';
 
+import { Public } from '../auth/auth.decorators.js';
 import { HealthService } from './health.service.js';
 
 /**
@@ -9,6 +11,8 @@ import { HealthService } from './health.service.js';
  * orchestrators and uptime checks should not need a token, and the payload
  * contains nothing a stranger could use.
  */
+@Public()
+@SkipThrottle()
 @Controller()
 export class HealthController {
   constructor(private readonly health: HealthService) {}

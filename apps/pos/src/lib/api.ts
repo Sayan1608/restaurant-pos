@@ -45,6 +45,12 @@ export interface RequestOptions {
    * information the screen needs to show.
    */
   acceptStatuses?: readonly number[];
+  /**
+   * Extra request headers -- the Authorization bearer token, or the device
+   * token. Kept as a plain option so this module stays unaware of *how*
+   * credentials are stored; see auth-client.ts for that.
+   */
+  headers?: Record<string, string>;
 }
 
 export async function apiRequest<T>(
@@ -52,7 +58,14 @@ export async function apiRequest<T>(
   schema: ZodType<T>,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, idempotencyKey, signal, acceptStatuses = [] } = options;
+  const {
+    method = 'GET',
+    body,
+    idempotencyKey,
+    signal,
+    acceptStatuses = [],
+    headers: extraHeaders,
+  } = options;
 
   let response: Response;
   try {
@@ -63,6 +76,7 @@ export async function apiRequest<T>(
         accept: 'application/json',
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         ...(idempotencyKey ? { [HEADERS.idempotencyKey]: idempotencyKey } : {}),
+        ...extraHeaders,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });

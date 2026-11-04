@@ -6,6 +6,7 @@ import { buildPinoHttpOptions } from './logger.options.js';
 const envFor = (overrides: Record<string, string> = {}): Env =>
   parseEnv({
     DATABASE_URL: 'postgresql://pos:pos@localhost:5432/pos',
+    JWT_ACCESS_SECRET: 'test-only-secret-0123456789abcdefghijklmnop',
     ...overrides,
   });
 

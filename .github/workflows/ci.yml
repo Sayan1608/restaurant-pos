@@ -12,6 +12,9 @@ concurrency:
 env:
   DATABASE_URL: postgresql://pos:pos@localhost:5432/pos?schema=public
   REDIS_URL: redis://localhost:6379
+  # CI-only throwaway. Real environments generate their own; the API refuses to
+  # boot without one, which is why it has to be set here at all.
+  JWT_ACCESS_SECRET: ci-only-secret-0123456789abcdefghijklmnopqrstuv
 
 jobs:
   verify:

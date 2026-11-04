@@ -18,6 +18,7 @@ const env = (nodeEnv: 'development' | 'production') =>
   parseEnv({
     NODE_ENV: nodeEnv,
     DATABASE_URL: 'postgresql://pos:pos@localhost:5432/pos',
+    JWT_ACCESS_SECRET: 'test-only-secret-0123456789abcdefghijklmnop',
   });
 
 function capture(exception: unknown, nodeEnv: 'development' | 'production' = 'development') {

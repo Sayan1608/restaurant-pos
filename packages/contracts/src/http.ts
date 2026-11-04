@@ -10,4 +10,10 @@ export const HEADERS = {
   idempotencyKey: 'idempotency-key',
   /** Optimistic concurrency on the order aggregate (Step 5). */
   ifMatchVersion: 'if-match-version',
+  /**
+   * The till's long-lived pairing credential. Sent on the cashier PIN login and
+   * on device-scoped reads; separate from the Authorization header because it
+   * identifies the *terminal*, not the person using it.
+   */
+  deviceToken: 'x-device-token',
 } as const;
