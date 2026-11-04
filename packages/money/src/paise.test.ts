@@ -208,6 +208,28 @@ describe('splitByWeights()', () => {
   it('rejects a non-positive bucket count', () => {
     expect(() => splitEvenly(paise(100), 0)).toThrow(/positive integer/);
   });
+
+  it.each([
+    ['a negative weight', [1, -1]],
+    ['NaN', [1, Number.NaN]],
+    ['Infinity', [1, Number.POSITIVE_INFINITY]],
+  ])('refuses %s rather than silently mis-splitting', (_label, weights) => {
+    expect(() => splitByWeights(paise(1000), weights)).toThrow(/finite and non-negative/);
+  });
+});
+
+describe('overflow guard', () => {
+  it('refuses a multiplication that would leave the exact integer range', () => {
+    // Beyond Number.MAX_SAFE_INTEGER an integer silently stops being exact.
+    // For money that is the worst possible failure: a total that is simply
+    // wrong, with nothing to indicate it. Fail loudly instead.
+    expect(() => applyBps(paise(MAX_PAISE), bps(1_000_000))).toThrow(/safe integer range/);
+  });
+
+  it('still handles the largest realistic bill without complaint', () => {
+    // ₹10,00,000 at 18% -- far above any restaurant bill.
+    expect(applyBps(fromRupees('1000000.00'), bps(1800))).toBe(18_000_000);
+  });
 });
 
 describe('formatting', () => {

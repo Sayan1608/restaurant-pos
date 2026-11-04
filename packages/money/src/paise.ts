@@ -46,7 +46,12 @@ export function paise(value: number): Paise {
   if (Math.abs(value) > MAX_PAISE) {
     throw new MoneyError(`Money value ${value} exceeds the ±${MAX_PAISE} paise limit.`);
   }
-  return value as Paise;
+  // Normalise negative zero. `-0 === 0` is true so arithmetic is unaffected,
+  // but `Object.is(-0, 0)` is false -- which quietly breaks equality checks,
+  // Map keys and snapshot comparisons, and would print a refund line as
+  // "-₹0.00". Every operation here funnels through paise(), so collapsing it at
+  // this one point makes a -0 Paise impossible to construct.
+  return (value === 0 ? 0 : value) as Paise;
 }
 
 /** True when the value is a valid paise integer. Never throws. */

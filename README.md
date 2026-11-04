@@ -36,17 +36,47 @@ Probes: `curl localhost:3001/healthz` and `curl localhost:3001/readyz`.
 
 ### Scripts
 
-| Command           | What it does                                           |
-| ----------------- | ------------------------------------------------------ |
-| `pnpm dev`        | API (watch) + POS (Vite) + shared packages (tsc watch) |
-| `pnpm test`       | Whole-monorepo vitest run                              |
-| `pnpm typecheck`  | `tsc --noEmit` in every package                        |
-| `pnpm lint`       | ESLint, including the money-safety rules               |
-| `pnpm format`     | Prettier write                                         |
-| `pnpm build`      | Builds packages, API and POS in dependency order       |
-| `pnpm db:migrate` | Create and apply a migration                           |
-| `pnpm db:reset`   | Drop, re-migrate and re-seed                           |
-| `pnpm db:studio`  | Prisma Studio                                          |
+| Command              | What it does                                           |
+| -------------------- | ------------------------------------------------------ |
+| `pnpm dev`           | API (watch) + POS (Vite) + shared packages (tsc watch) |
+| `pnpm test`          | Whole-monorepo vitest run                              |
+| `pnpm test:coverage` | Same, with coverage and threshold enforcement          |
+| `pnpm test:unit`     | Unit tests only — skips the tests that need a database |
+| `pnpm typecheck`     | `tsc --noEmit` in every package                        |
+| `pnpm lint`          | ESLint, including the money-safety rules               |
+| `pnpm format`        | Prettier write                                         |
+| `pnpm build`         | Builds packages, API and POS in dependency order       |
+| `pnpm db:migrate`    | Create and apply a migration                           |
+| `pnpm db:reset`      | Drop, re-migrate and re-seed                           |
+| `pnpm db:studio`     | Prisma Studio                                          |
+
+## Testing
+
+```bash
+pnpm test              # everything
+pnpm test:coverage     # + coverage report in coverage/index.html, thresholds enforced
+pnpm test:unit         # no database needed
+```
+
+Three layers, each answering a question the others cannot:
+
+- **Unit** — pure logic. All of `@pos/money` lives here, including a brute-force
+  invariant over ~1000 amounts × 5 weight shapes proving a prorated discount always sums back
+  exactly.
+- **Component / HTTP** — controllers with Prisma stubbed, and the POS UI against a mocked
+  `fetch`. Fast, and they assert the response _contract_, not just the status code.
+- **Integration** (`*.integration.test.ts`) — the whole app booted with the real modules and a
+  real PostgreSQL. These need the database up (`pnpm db:up && pnpm db:migrate`); `pnpm test:unit`
+  skips them.
+
+The integration tests assert the guarantees the _database_ makes — unique constraints, `onDelete:
+Restrict`, defaults, transaction rollback — because an application-level check can be bypassed by a
+bug or a script, while a constraint cannot. Those rules protect financial records, so they are
+tested against Postgres rather than a mock.
+
+Coverage sits at ~99% of lines with thresholds enforced in CI. The small remainder is
+unreachable defensive code (a division-by-zero guard, a filesystem-root walk) left deliberately
+uncovered rather than excluded, so it stays visible in the report.
 
 ## Layout
 

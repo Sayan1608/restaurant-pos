@@ -1,4 +1,11 @@
-import { HttpStatus, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiErrorSchema } from '@pos/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -66,6 +73,35 @@ describe('AllExceptionsFilter', () => {
     const { status, body } = capture(new NotFoundException('nope'));
     expect(status).toBe(HttpStatus.NOT_FOUND);
     expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it.each([
+    [new UnauthorizedException(), HttpStatus.UNAUTHORIZED, 'UNAUTHENTICATED'],
+    [new ForbiddenException(), HttpStatus.FORBIDDEN, 'FORBIDDEN'],
+    [
+      new HttpException('slow down', HttpStatus.TOO_MANY_REQUESTS),
+      HttpStatus.TOO_MANY_REQUESTS,
+      'RATE_LIMITED',
+    ],
+    [new BadRequestException('bad'), HttpStatus.BAD_REQUEST, 'MALFORMED_REQUEST'],
+    [
+      new HttpException('upstream died', HttpStatus.BAD_GATEWAY),
+      HttpStatus.BAD_GATEWAY,
+      'INTERNAL_ERROR',
+    ],
+  ])('maps a $1 framework exception to the right contract code', (thrown, status, code) => {
+    const result = capture(thrown);
+    expect(result.status).toBe(status);
+    expect(result.body.error.code).toBe(code);
+  });
+
+  it('hides the message of a 5xx framework exception but keeps a 4xx one', () => {
+    expect(capture(new HttpException('database on fire', 503)).body.error.message).toBe(
+      'Something went wrong.',
+    );
+    expect(capture(new BadRequestException('quantity must be positive')).body.error.message).toBe(
+      'quantity must be positive',
+    );
   });
 
   it('never leaks an internal message in production', () => {

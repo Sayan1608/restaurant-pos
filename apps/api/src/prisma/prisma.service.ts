@@ -17,13 +17,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   constructor(@Inject(ENV) env: Env) {
     super({
       datasources: { db: { url: env.DATABASE_URL } },
-      log:
-        env.NODE_ENV === 'development'
-          ? [
-              { emit: 'stdout', level: 'warn' },
-              { emit: 'stdout', level: 'error' },
-            ]
-          : [{ emit: 'stdout', level: 'error' }],
+      log: PrismaService.logLevelsFor(env.NODE_ENV).map((level) => ({
+        emit: 'stdout' as const,
+        level,
+      })),
     });
   }
 
@@ -34,6 +31,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
+  }
+
+  /**
+   * Query logging is noisier in development on purpose: a warning there is a
+   * hint, while in production it is log volume nobody reads.
+   */
+  static logLevelsFor(nodeEnv: Env['NODE_ENV']): Array<'warn' | 'error'> {
+    return nodeEnv === 'development' ? ['warn', 'error'] : ['error'];
   }
 
   /** Cheap round-trip used by the readiness probe. */

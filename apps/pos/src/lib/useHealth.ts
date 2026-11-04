@@ -1,7 +1,7 @@
 import { type Liveness, LivenessSchema, type Readiness, ReadinessSchema } from '@pos/contracts';
 import { useCallback, useEffect, useState } from 'react';
 
-import { ApiClientError, apiRequest } from './api';
+import { apiRequest } from './api';
 
 export interface HealthState {
   phase: 'checking' | 'connected' | 'unreachable';
@@ -30,11 +30,12 @@ export function useHealth(intervalMs = 15_000): HealthState {
       try {
         const [liveness, readiness] = await Promise.all([
           apiRequest('/healthz', LivenessSchema, { signal: controller.signal }),
-          apiRequest('/readyz', ReadinessSchema, { signal: controller.signal }).catch((error) => {
-            // A degraded readiness answers 503 with a valid body; that is
-            // information, not a failure to fetch.
-            if (error instanceof ApiClientError && error.status === 503) return undefined;
-            throw error;
+          // A degraded readiness answers 503 *with* the dependency list. That
+          // body is the whole point of the call, so accept the status rather
+          // than treating it as a failed request.
+          apiRequest('/readyz', ReadinessSchema, {
+            signal: controller.signal,
+            acceptStatuses: [503],
           }),
         ]);
 

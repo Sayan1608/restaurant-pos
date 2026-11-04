@@ -81,8 +81,10 @@ jobs:
           --shadow-database-url "$DATABASE_URL"
           --exit-code
 
-      - name: Test
-        run: pnpm test
+      # Coverage thresholds are only real if CI enforces them, so the pipeline
+      # runs the coverage variant rather than a bare test run.
+      - name: Test with coverage
+        run: pnpm test:coverage
 
       - name: Build
         run: pnpm build

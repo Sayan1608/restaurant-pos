@@ -97,6 +97,50 @@ describe('<App />', () => {
     expect(screen.getByText(/pnpm db:up/)).toBeInTheDocument();
   });
 
+  it('omits the latency when the server did not report one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch((url) =>
+        url.includes('readyz')
+          ? {
+              status: 200,
+              body: {
+                status: 'ok',
+                dependencies: [{ name: 'postgres', status: 'up' }],
+                timestamp: new Date().toISOString(),
+              },
+            }
+          : { status: 200, body: liveness },
+      ),
+    );
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText('up')).toBeInTheDocument());
+  });
+
+  it('falls back to "down" when a failure has no message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch((url) =>
+        url.includes('readyz')
+          ? {
+              status: 503,
+              body: {
+                status: 'degraded',
+                dependencies: [{ name: 'postgres', status: 'down' }],
+                timestamp: new Date().toISOString(),
+              },
+            }
+          : { status: 200, body: liveness },
+      ),
+    );
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText('down')).toBeInTheDocument());
+  });
+
   it('renders paise through the shared formatter, not float arithmetic', () => {
     render(<App />);
     expect(screen.getByText('₹0.07')).toBeInTheDocument();

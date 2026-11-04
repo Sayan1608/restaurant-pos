@@ -38,6 +38,13 @@ export interface RequestOptions {
   /** Required on money-affecting mutations; makes a retry a no-op server-side. */
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /**
+   * Non-2xx statuses whose body is still a valid, meaningful payload rather
+   * than an error. `/readyz` answers 503 *with* the dependency list when
+   * something is down -- treating that as an exception throws away exactly the
+   * information the screen needs to show.
+   */
+  acceptStatuses?: readonly number[];
 }
 
 export async function apiRequest<T>(
@@ -45,7 +52,7 @@ export async function apiRequest<T>(
   schema: ZodType<T>,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, idempotencyKey, signal } = options;
+  const { method = 'GET', body, idempotencyKey, signal, acceptStatuses = [] } = options;
 
   let response: Response;
   try {
@@ -71,7 +78,7 @@ export async function apiRequest<T>(
   const requestId = response.headers.get(HEADERS.requestId) ?? undefined;
   const payload: unknown = await response.json().catch(() => undefined);
 
-  if (!response.ok) {
+  if (!response.ok && !acceptStatuses.includes(response.status)) {
     const parsed = ApiErrorSchema.safeParse(payload);
     if (parsed.success) {
       throw new ApiClientError(
