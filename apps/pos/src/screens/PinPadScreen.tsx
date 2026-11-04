@@ -63,6 +63,72 @@ export function PinPadScreen() {
     if (next.length === PIN_MAX_LENGTH) void submit(next);
   };
 
+  /**
+   * Physical keyboard support.
+   *
+   * Plenty of counters run this on a desktop with a numeric keypad, where
+   * typing is far faster than aiming at buttons -- and keyboard entry is a
+   * baseline accessibility expectation besides.
+   *
+   * Deliberately a document-level listener rather than a focused `<input>`:
+   * focusing a text field on a tablet raises the on-screen keyboard, which
+   * would cover the pad the cashier is tapping. This way physical keyboards
+   * work and touch devices are unaffected.
+   */
+  useEffect(() => {
+    if (!selected) return;
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // Leave browser and OS shortcuts alone.
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (busy) return;
+
+      if (/^[0-9]$/.test(event.key)) {
+        event.preventDefault();
+        press(event.key);
+        return;
+      }
+
+      switch (event.key) {
+        case 'Backspace':
+          // Without preventDefault this navigates back in some browsers.
+          event.preventDefault();
+          clearError();
+          setPin((value) => value.slice(0, -1));
+          return;
+
+        case 'Delete':
+          event.preventDefault();
+          clearError();
+          setPin('');
+          return;
+
+        case 'Escape':
+          event.preventDefault();
+          clearError();
+          // Clear first, and only step back to the name list once the entry is
+          // already empty -- so a mistyped PIN is not two taps from losing the
+          // selected cashier.
+          if (pin.length > 0) setPin('');
+          else setSelected(null);
+          return;
+
+        case 'Enter':
+          event.preventDefault();
+          if (pin.length >= PIN_MIN_LENGTH) void submit(pin);
+          return;
+
+        default:
+          return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // Re-subscribed when the entry changes, so the handler always closes over
+    // the current PIN.
+  }, [selected, busy, pin, clearError]);
+
   if (!selected) {
     return (
       <div className="flex min-h-full flex-col p-4">
@@ -188,6 +254,10 @@ export function PinPadScreen() {
       >
         Back
       </Button>
+
+      <p className="mt-4 text-center text-xs text-ink-muted">
+        Tap the pad or type on the keyboard · Enter to sign in · Esc to clear
+      </p>
     </div>
   );
 }

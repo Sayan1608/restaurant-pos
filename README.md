@@ -90,9 +90,22 @@ Restrict`, defaults, transaction rollback — because an application-level check
 bug or a script, while a constraint cannot. Those rules protect financial records, so they are
 tested against Postgres rather than a mock.
 
-Coverage sits at ~99% of lines with thresholds enforced in CI. The small remainder is
+Coverage sits at ~97% of lines with thresholds enforced in CI. The small remainder is
 unreachable defensive code (a division-by-zero guard, a filesystem-root walk) left deliberately
 uncovered rather than excluded, so it stays visible in the report.
+
+### A known flake
+
+Twice during development, a local full run failed at the _suite_ level in several integration
+files at once — `callModuleInitHook` → `PrismaService.onModuleInit`, with **zero** individual test
+failures and the rest skipped. It has not reproduced in seven subsequent full runs, including under
+coverage instrumentation and immediately after a bulk `pnpm format`, and it was not connection
+exhaustion (peak 6 of 100 Postgres connections during a run). Unexplained so far.
+
+If you hit it, re-run before investigating the code: the signature is a suite-level Prisma connect
+failure, not an assertion failure. If it becomes frequent, the first thing to try is serialising
+the database-backed files (`fileParallelism: false` in `apps/api/vitest.config.ts`), since they
+share one database.
 
 ## Security model (Step 2)
 

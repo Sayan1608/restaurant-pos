@@ -282,6 +282,142 @@ describe('till states', () => {
       expect(pinCall?.body).toEqual({ staffUserId: CASHIER.id, pin: '1234' });
     });
 
+    it('accepts the PIN from a physical keyboard', async () => {
+      const { calls } = fakeApi({
+        ...PROBES,
+        '/v1/auth/cashiers': {
+          status: 200,
+          body: { cashiers: [{ id: CASHIER.id, name: 'Priya Menon' }] },
+        },
+        '/v1/auth/pin': {
+          status: 200,
+          body: session(CASHIER, { id: DEVICE_ID, name: 'Counter Till 1' }),
+        },
+        '/v1/auth/me': {
+          status: 200,
+          body: {
+            staff: CASHIER,
+            device: { id: DEVICE_ID, name: 'Counter Till 1' },
+            outlet: OUTLET,
+          },
+        },
+      });
+
+      render(<App />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Priya Menon' }));
+
+      // Plenty of counters run this on a desktop with a numeric keypad.
+      await user.keyboard('1234{Enter}');
+
+      const banner = await screen.findByRole('banner');
+      expect(within(banner).getByText('Priya Menon')).toBeInTheDocument();
+
+      const pinCall = calls.find((call) => call.url.includes('/v1/auth/pin'));
+      expect(pinCall?.body).toEqual({ staffUserId: CASHIER.id, pin: '1234' });
+    });
+
+    it('auto-submits on the sixth typed digit', async () => {
+      const { calls } = fakeApi({
+        ...PROBES,
+        '/v1/auth/cashiers': {
+          status: 200,
+          body: { cashiers: [{ id: CASHIER.id, name: 'Priya Menon' }] },
+        },
+        '/v1/auth/pin': {
+          status: 401,
+          body: errorBody('INVALID_CREDENTIALS', 'Those sign-in details are not correct.'),
+        },
+      });
+
+      render(<App />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Priya Menon' }));
+
+      await user.keyboard('123456');
+
+      // No Enter pressed: the sixth digit submits by itself.
+      await waitFor(() =>
+        expect(calls.some((call) => call.url.includes('/v1/auth/pin'))).toBe(true),
+      );
+    });
+
+    it('deletes the last typed digit with Backspace', async () => {
+      fakeApi({
+        ...PROBES,
+        '/v1/auth/cashiers': {
+          status: 200,
+          body: { cashiers: [{ id: CASHIER.id, name: 'Priya Menon' }] },
+        },
+      });
+
+      render(<App />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Priya Menon' }));
+
+      await user.keyboard('123');
+      expect(screen.getByRole('status')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('3 of 6'),
+      );
+
+      await user.keyboard('{Backspace}');
+      expect(screen.getByRole('status')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('2 of 6'),
+      );
+    });
+
+    it('clears the entry with Escape, and steps back only when already empty', async () => {
+      fakeApi({
+        ...PROBES,
+        '/v1/auth/cashiers': {
+          status: 200,
+          body: { cashiers: [{ id: CASHIER.id, name: 'Priya Menon' }] },
+        },
+      });
+
+      render(<App />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Priya Menon' }));
+
+      await user.keyboard('12{Escape}');
+      // Still on the PIN screen, entry cleared -- a mistyped PIN should not be
+      // two taps from losing the selected cashier.
+      expect(screen.getByText(/signing in as/i)).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('0 of 6'),
+      );
+
+      await user.keyboard('{Escape}');
+      expect(
+        await screen.findByRole('heading', { name: /who is on the till/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('ignores letters and keyboard shortcuts', async () => {
+      fakeApi({
+        ...PROBES,
+        '/v1/auth/cashiers': {
+          status: 200,
+          body: { cashiers: [{ id: CASHIER.id, name: 'Priya Menon' }] },
+        },
+      });
+
+      render(<App />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: 'Priya Menon' }));
+
+      await user.keyboard('abc{Control>}1{/Control}');
+
+      // Ctrl+1 is a browser tab shortcut; swallowing it would be rude.
+      expect(screen.getByRole('status')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('0 of 6'),
+      );
+    });
+
     it('surfaces a lockout in words the cashier can act on', async () => {
       fakeApi({
         ...PROBES,
