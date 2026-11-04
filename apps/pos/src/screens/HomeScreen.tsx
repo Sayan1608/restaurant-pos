@@ -3,6 +3,7 @@ import { formatPaise, fromRupees } from '@pos/money';
 import { Button, Card, RoleBadge } from '../components/ui';
 import { useAuth } from '../lib/auth-context';
 import { useHealth } from '../lib/useHealth';
+import { TillsSection } from './TillsSection';
 
 const ROADMAP = [
   { step: 1, title: 'Foundation & skeleton', state: 'done' },
@@ -92,6 +93,10 @@ export function HomeScreen() {
             <Row label="Timezone" value={me.outlet.timezone} />
           </dl>
         </Card>
+
+        {/* Hidden from cashiers as a convenience; the server enforces the role
+            regardless, so a hidden button is never the access control. */}
+        {me.staff.role !== 'CASHIER' && <TillsSection />}
 
         <Card>
           <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-muted">

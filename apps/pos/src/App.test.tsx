@@ -442,6 +442,23 @@ describe('till states', () => {
             outlet: OUTLET,
           },
         },
+        // A manager's home screen now includes the Tills section.
+        '/v1/devices': {
+          status: 200,
+          body: {
+            devices: [
+              {
+                id: DEVICE_ID,
+                outletId: OUTLET.id,
+                name: 'Counter Till 1',
+                pairedAt: new Date().toISOString(),
+                lastSeenAt: null,
+                revokedAt: null,
+                isActive: true,
+              },
+            ],
+          },
+        },
         ...extra,
       });
 
